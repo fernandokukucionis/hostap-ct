@@ -40,6 +40,7 @@ static void bgscan_simple_timeout(void *eloop_ctx, void *timeout_ctx)
 	struct bgscan_simple_data *data = eloop_ctx;
 	struct wpa_supplicant *wpa_s = data->wpa_s;
 	struct wpa_driver_scan_params params;
+	bool was_btm = false;
 
 	if (wpa_s->current_bss &&
 	    wpa_bss_ext_capab(wpa_s->current_bss, WLAN_EXT_CAPAB_BSS_TRANSITION) &&
@@ -59,6 +60,7 @@ static void bgscan_simple_timeout(void *eloop_ctx, void *timeout_ctx)
 				/* start new timeout for next one.  We don't have scan callback to otherwise
 				 * trigger future progress when using BTM path.
 				 */
+				was_btm = true;
 				eloop_register_timeout(data->scan_interval, 0,
 						       bgscan_simple_timeout, data, NULL);
 				goto scan_ok;
@@ -90,7 +92,11 @@ static void bgscan_simple_timeout(void *eloop_ctx, void *timeout_ctx)
 	} else {
 	scan_ok:
 		if (data->scan_interval == data->short_interval) {
-			data->short_scan_count++;
+			/* btm is more efficient than scan, we assume,
+			 * so don't penalize it.
+			 */
+			if (!was_btm)
+				data->short_scan_count++;
 			if (data->short_scan_count >= data->max_short_scans) {
 				data->scan_interval = data->long_interval;
 				wpa_printf(MSG_DEBUG, "bgscan simple: Backing "
